@@ -24,10 +24,50 @@ class Creator
 {
     public static function getContents(
         string $current_dir,
-        string $suggested_dir = null,
-        int $level = 3,
-        string $vendor_dir = 'vendor'
+        ?string $suggested_dir,
+        int $level,
+        string $vendor_dir
     ) : string {
+        $paths = self::getPaths($current_dir, $suggested_dir);
+
+        $template_file_name = dirname(__DIR__, 3) . '/assets/config_levels/' . $level . '.xml';
+
+        if (!file_exists($template_file_name)) {
+            throw new ConfigCreationException('Could not open config template ' . $template_file_name);
+        }
+
+        $template = (string)file_get_contents($template_file_name);
+
+        $template = str_replace(
+            '<directory name="src" />',
+            implode("\n        ", $paths),
+            $template
+        );
+
+        $template = str_replace(
+            '<directory name="vendor" />',
+            '<directory name="' . $vendor_dir . '" />',
+            $template
+        );
+
+        return $template;
+    }
+
+    public static function getLevel(
+        string $current_dir,
+        ?string $suggested_dir,
+        string $vendor_dir
+    ) : int {
+        $config_contents = self::getContents($current_dir, $suggested_dir, 1, $vendor_dir);
+
+
+    }
+
+    /**
+     * @return non-empty-list<string>
+     */
+    public static function getPaths(string $current_dir, ?string $suggested_dir)
+    {
         $replacements = [];
 
         if ($suggested_dir) {
@@ -69,31 +109,11 @@ class Creator
             }
         }
 
-        $template_file_name = dirname(__DIR__, 3) . '/assets/config_levels/' . $level . '.xml';
-
-        if (!file_exists($template_file_name)) {
-            throw new ConfigCreationException('Could not open config template ' . $template_file_name);
-        }
-
-        $template = (string)file_get_contents($template_file_name);
-
-        $template = str_replace(
-            '<directory name="src" />',
-            implode("\n        ", $replacements),
-            $template
-        );
-
-        $template = str_replace(
-            '<directory name="vendor" />',
-            '<directory name="' . $vendor_dir . '" />',
-            $template
-        );
-
-        return $template;
+        return $replacements;
     }
 
     /**
-     * @return string[]
+     * @return list<string>
      * @psalm-suppress MixedAssignment
      * @psalm-suppress MixedArgument
      */
@@ -141,7 +161,7 @@ class Creator
     }
 
     /**
-     * @return string[]
+     * @return list<string>
      */
     private static function guessPhpFileDirs(string $current_dir) : array
     {
@@ -174,6 +194,6 @@ class Creator
             }
         }
 
-        return \array_unique($nodes);
+        return \array_values(\array_unique($nodes));
     }
 }

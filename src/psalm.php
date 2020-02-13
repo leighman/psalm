@@ -235,7 +235,7 @@ if (isset($options['i'])) {
         }
     ));
 
-    $level = 3;
+    $level = null;
     $source_dir = null;
 
     if (count($args)) {
@@ -255,6 +255,11 @@ if (isset($options['i'])) {
     }
 
     $vendor_dir = getVendorDir($current_dir);
+
+    if ($level === null) {
+        echo "Choosing config level\n";
+        $level = Psalm\Config\Creator::getLevel($current_dir, $source_dir, $vendor_dir);
+    }
 
     try {
         $template_contents = Psalm\Config\Creator::getContents($current_dir, $source_dir, $level, $vendor_dir);
