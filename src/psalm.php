@@ -208,9 +208,19 @@ $vendor_dir = getVendorDir($current_dir);
 
 $first_autoloader = requireAutoloaders($current_dir, isset($options['r']), $vendor_dir);
 
+if (array_key_exists('v', $options)) {
+    echo 'Psalm ' . PSALM_VERSION . PHP_EOL;
+    exit;
+}
+
 $output_format = isset($options['output-format']) && is_string($options['output-format'])
     ? $options['output-format']
     : \Psalm\Report::TYPE_CONSOLE;
+
+$psalm_template_contents = null;
+
+$level = null;
+$inferred_source_dir = null;
 
 if (isset($options['i'])) {
     if (file_exists($current_dir . 'psalm.xml')) {
@@ -235,9 +245,6 @@ if (isset($options['i'])) {
         }
     ));
 
-    $level = null;
-    $source_dir = null;
-
     if (count($args)) {
         if (count($args) > 2) {
             die('Too many arguments provided for psalm --init' . PHP_EOL);
@@ -251,35 +258,36 @@ if (isset($options['i'])) {
             $level = (int)$args[1];
         }
 
-        $source_dir = $args[0];
+        $inferred_source_dir = $args[0];
     }
 
     $vendor_dir = getVendorDir($current_dir);
 
     if ($level === null) {
-        echo "Choosing config level\n";
-        $level = Psalm\Config\Creator::getLevel($current_dir, $source_dir, $vendor_dir);
-    }
+        echo "Calculating best config level based on project files\n";
+        Psalm\Config\Creator::createBareConfig($current_dir, $inferred_source_dir, $vendor_dir);
+        $config = \Psalm\Config::getInstance();
+    } else {
+        try {
+            $template_contents = Psalm\Config\Creator::getContents(
+                $current_dir,
+                $inferred_source_dir,
+                $level,
+                $vendor_dir
+            );
+        } catch (Psalm\Exception\ConfigCreationException $e) {
+            die($e->getMessage() . PHP_EOL);
+        }
 
-    try {
-        $template_contents = Psalm\Config\Creator::getContents($current_dir, $source_dir, $level, $vendor_dir);
-    } catch (Psalm\Exception\ConfigCreationException $e) {
-        die($e->getMessage() . PHP_EOL);
-    }
+        if (!file_put_contents($current_dir . 'psalm.xml', $template_contents)) {
+            die('Could not write to psalm.xml' . PHP_EOL);
+        }
 
-    if (!file_put_contents($current_dir . 'psalm.xml', $template_contents)) {
-        die('Could not write to psalm.xml' . PHP_EOL);
+        exit('Config file created successfully. Please re-run psalm.' . PHP_EOL);
     }
-
-    exit('Config file created successfully. Please re-run psalm.' . PHP_EOL);
+} else {
+    $config = initialiseConfig($path_to_config, $current_dir, $output_format, $first_autoloader);
 }
-
-if (array_key_exists('v', $options)) {
-    echo 'Psalm ' . PSALM_VERSION . PHP_EOL;
-    exit;
-}
-
-$config = initialiseConfig($path_to_config, $current_dir, $output_format, $first_autoloader);
 
 if ($config->resolve_from_config_file) {
     $current_dir = $config->base_dir;
@@ -723,10 +731,32 @@ if ($stubs_location) {
     );
 }
 
-IssueBuffer::finish(
-    $project_analyzer,
-    !$paths_to_check,
-    $start_time,
-    isset($options['stats']),
-    $issue_baseline
-);
+if (!isset($options['i'])) {
+    IssueBuffer::finish(
+        $project_analyzer,
+        !$paths_to_check,
+        $start_time,
+        isset($options['stats']),
+        $issue_baseline
+    );
+} else {
+    $level = \Psalm\Config\Creator::getLevel(IssueBuffer::getIssuesData());
+    try {
+        $template_contents = Psalm\Config\Creator::getContents(
+            $current_dir,
+            $inferred_source_dir,
+            $level,
+            $vendor_dir
+        );
+    } catch (Psalm\Exception\ConfigCreationException $e) {
+        die($e->getMessage() . PHP_EOL);
+    }
+
+    if (!file_put_contents($current_dir . 'psalm.xml', $template_contents)) {
+        die('Could not write to psalm.xml' . PHP_EOL);
+    }
+
+    exit('Config file created successfully. Please re-run psalm.' . PHP_EOL);
+}
+
+

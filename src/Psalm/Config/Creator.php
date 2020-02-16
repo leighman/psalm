@@ -53,14 +53,20 @@ class Creator
         return $template;
     }
 
-    public static function getLevel(
+    public static function createBareConfig(
         string $current_dir,
         ?string $suggested_dir,
         string $vendor_dir
-    ) : int {
+    ) : void {
         $config_contents = self::getContents($current_dir, $suggested_dir, 1, $vendor_dir);
 
+        \Psalm\Config::loadFromXML($current_dir, $config_contents);
+    }
 
+    public static function getLevel(array $issues) : int
+    {
+
+        return 3;
     }
 
     /**
